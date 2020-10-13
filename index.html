@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <style>
+        *{
+            box-sizing: border-box;
+        }
+        html,body{
+            margin:0;
+            padding:0;
+        }
+        .app {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100vw;
+            height: 100vh;
+        }
+        #container{
+            height: 200px;
+            border: 5px solid black;
+            overflow: hidden;
+        }
+        .whitenote{
+            height: 100%;
+            width: 25px;
+            background-color: white;
+            float: left;
+            border-right: 1px solid black;
+            position: relative;
+        }
+        .blacknote {
+            position: absolute;
+            height: 65%;
+            width: 55%;
+            z-index:1;
+            background: #333;
+            left: 70%;
+        }
+        .tone-momentary-button{
+            position: absolute;
+            top: 15px; 
+            right: 15px; 
+            background-color: gray;
+            color: black; 
+            width: 150px; 
+            height: 60px; 
+            text-align: center;
+            line-height: 60px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <div id="container">
+            
+        </div>
+        <div class="tone-momentary-button">Some Noice</div>
+
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.4.9/Tone.js"></script>
+    <script>
+        let synth = new Tone.PolySynth().toDestination();
+        let notes = ["C", "D", "E", "F", "G", "A", "B"]
+        let littleNotes = "awsedftgyhujkolpñ"
+        let html = ""
+        let currentOctave = 5
+        // let's pretend that a mouse doesn't have more than 9 buttons
+        let mouseDownCount = 0;
+        document.body.onmousedown = function(evt) { 
+            mouseDownCount = 1;
+        }
+        document.body.onmouseup = function(evt) {
+            mouseDownCount = 0;
+        }   
+
+        for(let octave = 0; octave < 7; octave++){
+            for (let i = 0; i < notes.length; i++){
+                hasSharp = true
+                let note = notes[i]
+                if(note == "E" || note == "B"){
+                    hasSharp = false
+                }
+                    html += `<div class='whitenote ${note}-note' onmouseover='checkNoteEnter(this, false)' onmouseleave='checkNoteLeave(this, false)' onmousedown='noteDown(this, false)'onmouseup='noteUp(this, false)' data-note='${note + (octave+3)}'>`
+                
+                if(hasSharp){
+                    html += `<div class='blacknote ${note}-note' onmouseover='checkNoteEnter(this, true)' onmouseleave='checkNoteLeave(this, true)' onmousedown='noteDown(this, true)'onmouseup='noteUp(this, true)' data-note='${note + '#'+(octave+3)}'></div>`
+                }
+                html += '</div>'
+            }
+        }
+        document.getElementById('container').innerHTML = html;
+        function noteDown(elem,isSharp){
+            let note = elem.dataset.note
+            let noteNumber = noteToMidiObjct[note[0]] 
+            elem.style.background = isSharp ? noteColor[noteNumber+1] : noteColor[noteNumber]
+            elem.classList.add("playing")
+            synth.triggerAttackRelease(note, "16n")
+            event.stopPropagation()
+            mouseDownCount = 1;
+        }
+        function noteUp(elem, isSharp){
+            elem.style.background = isSharp ? '#333' : 'white'
+            elem.classList.remove("playing")
+        }
+        function checkNoteEnter(elem, isSharp){
+            if(!elem.classList.contains("playing") && mouseDownCount){
+                noteDown(elem, isSharp)
+                event.stopPropagation()
+            }
+        }
+        function checkNoteLeave(elem, isSharp){
+            if(elem.classList.contains("playing")){
+                noteUp(elem, isSharp)
+                event.stopPropagation()
+            }
+        }
+        
+        
+		// make the noise and connect it to the output
+		const noise = new Tone.Noise({
+			volume: -10,
+			type: "brown"
+		}).toDestination();
+
+		// bind the inteface
+		document.querySelector(".tone-momentary-button").addEventListener("mousedown", () => noise.start());
+		document.querySelector(".tone-momentary-button").addEventListener("mouseup", () => noise.stop());
+        
+
+        console.clear()
+        navigator.requestMIDIAccess().then(access=> {
+            const devices = access.inputs.values();
+            for (let device of devices){
+                device.onmidimessage = onMidiMessage
+            }
+        }).catch(console.error)
+
+        document.addEventListener("keydown", handleKeyDown)
+        document.addEventListener("keyup", handleKeyUp)
+
+        function handleKeyDown(event){
+            if(littleNotes.includes(event.key)){
+                let theNote = keyboardToNotesObjct[event.key]
+                let thisNoteOctave = "kolpñ".includes(event.key) ? currentOctave+1 : currentOctave
+                element = document.querySelector(`[data-note="${theNote + thisNoteOctave}"]`)
+                let wasSharp = false
+                if(theNote[theNote.length - 1] == "#"){
+                    wasSharp = true
+                }
+                noteDown(element,wasSharp)
+            }else if(event.key == "x" || event.key == "z"){
+                changeOctave(event.key)
+            }
+        }
+
+        function handleKeyUp(event){
+            console.log("keyUP")
+            if(littleNotes.includes(event.key)){
+                let theNote = keyboardToNotesObjct[event.key]
+                let thisNoteOctave = "kolpñ".includes(event.key) ? currentOctave+1 : currentOctave
+                element = document.querySelector(`[data-note="${theNote + thisNoteOctave}"]`)
+                let wasSharp = false
+                if(theNote[theNote.length - 1] == "#"){
+                    wasSharp = true
+                }
+                noteUp(element,wasSharp)
+                mouseDownCount = 0 //bizzare mouse-keyboard relationship cuz caos
+            }
+        }
+
+        function changeOctave(eventKey){
+            let direction = eventKey == "z" ? -1 : +1
+            currentOctave += direction
+        }
+
+        function onMidiMessage(message){
+            let [_,input,value] = message.data
+            if(input){
+                console.log({input, value})
+                let theNote = midiToNotesObjct[input % 12]
+                let theOctave = Math.floor(input/12)
+                console.log(theNote)
+                console.log(theOctave)
+                element = document.querySelector(`[data-note="${theNote + theOctave}"]`)
+                let wasSharp = false
+                if(theNote[theNote.length - 1] == "#"){
+                    wasSharp = true
+                }
+                if(value > 0){
+                    noteDown(element,wasSharp)
+                }
+                if(value == 0){
+                    noteUp(element,wasSharp)
+                }
+            }
+        }
+        let midiToNotesObjct = {
+            0:"C",
+            1:"C#",
+            2:"D",
+            3:"D#",
+            4:"E",
+            5:"F",
+            6:"F#",
+            7:"G",
+            8:"G#",
+            9:"A",
+            10:"A#",
+            11:"B",
+        }
+        let noteToMidiObjct = {
+            "C":0,
+            "C#":1,
+            "D":2,
+            "D#":3,
+            "E":4,
+            "F":5,
+            "F#":6,
+            "G":7,
+            "G#":8,
+            "A":9,
+            "A#":10,
+            "B":11,
+        }
+        let noteColor = {
+            0: "#efd31a",
+            1: "#f4ae1a",
+            2: "#f36b28",
+            3: "#ee3344",
+            4: "#ec468b",
+            5: "#b856a1",
+            6: "#905ba6",
+            7: "#518bc9",
+            8: "#28beb6",
+            9: "#67bf6b",
+            10: "#cae089",
+            11: "#f7e49a",
+        }
+        let keyboardToNotesObjct = {
+            "a":"C",
+            "w":"C#",
+            "s":"D",
+            "e":"D#",
+            "d":"E",
+            "f":"F",
+            "t":"F#",
+            "g":"G",
+            "y":"G#",
+            "h":"A",
+            "u":"A#",
+            "j":"B",
+            "k":"C",
+            "o":"C#",
+            "l":"D",
+            "p":"D#",
+            "ñ":"E",
+        }
+    
+        
+        
+        
+    </script>
+</body>
+</html>
