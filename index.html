@@ -133,12 +133,17 @@
         
 
         console.clear()
-        navigator.requestMIDIAccess().then(access=> {
-            const devices = access.inputs.values();
-            for (let device of devices){
-                device.onmidimessage = onMidiMessage
-            }
-        }).catch(console.error)
+        
+        if ("requestMIDIAccess" in navigator) {
+        // The Web MIDI API is available to us!
+            navigator.requestMIDIAccess().then(access=> {
+                const devices = access.inputs.values();
+                for (let device of devices){
+                    device.onmidimessage = onMidiMessage
+                }
+            }).catch(console.error)
+        }
+        
 
         document.addEventListener("keydown", handleKeyDown)
         document.addEventListener("keyup", handleKeyUp)
@@ -199,6 +204,7 @@
                 }
             }
         }
+        
         let midiToNotesObjct = {
             0:"C",
             1:"C#",
@@ -213,6 +219,7 @@
             10:"A#",
             11:"B",
         }
+        
         let noteToMidiObjct = {
             "C":0,
             "C#":1,
@@ -227,6 +234,7 @@
             "A#":10,
             "B":11,
         }
+        
         let noteColor = {
             0: "#efd31a",
             1: "#f4ae1a",
@@ -241,6 +249,7 @@
             10: "#cae089",
             11: "#f7e49a",
         }
+        
         let keyboardToNotesObjct = {
             "a":"C",
             "w":"C#",
