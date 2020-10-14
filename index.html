@@ -12,128 +12,170 @@
             margin:0;
             padding:0;
         }
-        .app {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            width: 100vw;
+        .container {
+            width: 80%;
+            max-width: 1200px;
+            margin: 0 auto;
             height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
         }
-        #container{
-            height: 200px;
-            border: 5px solid black;
-            overflow: hidden;
+        fieldset {
+            width: 350px; 
+            height: 70px;
+            text-align: left;
         }
-        .whitenote{
-            height: 100%;
-            width: 25px;
-            background-color: white;
-            float: left;
-            border-right: 1px solid black;
-            position: relative;
+        select,input,button{
+            margin-top:10px;
         }
-        .blacknote {
-            position: absolute;
-            height: 65%;
-            width: 55%;
-            z-index:1;
-            background: #333;
-            left: 70%;
-        }
-        .tone-momentary-button{
-            position: absolute;
-            top: 15px; 
-            right: 15px; 
-            background-color: gray;
-            color: black; 
-            width: 150px; 
-            height: 60px; 
-            text-align: center;
-            line-height: 60px;
+        .arrows{
             cursor: pointer;
         }
     </style>
 </head>
 <body>
-    <div class="app">
-        <div id="container">
-            
-        </div>
-        <div class="tone-momentary-button">Some Noice</div>
+    <div class="container">
+        <fieldset>
+            <label for="timbre"><strong>Select instrument</strong></label><br>
+            <span class="arrows left" onclick="changeInstrument(-1)"><</span>
+            <select id="timbre" onchange="changeInstrument(this.value)"></select>
+            <span class="arrows right" onclick="changeInstrument(128)">></span>
+        </fieldset>
+        <fieldset>
+            <label for="midiFile"><strong>Load Midi File:</strong></label><br>
+            <input type="file" id="midiFile" onchange="loadMidi(this.files)">
+        </fieldset>
+        <fieldset>
+            <button onclick="playMidi()">PLAY</button>
+            <button onclick="stopMidi()">STOP</button>
+        </fieldset>
+        <fieldset>
+            <label for="volume"><strong>Volume:</strong></label><br>
+            <input id="volume" type="range" value="50" min="0" max="100" oninput="setVolume(this.value)">
+        </fieldset>
+        <fieldset style="height:auto;">
+            <p>You can use your keyboard to play notes or connect a MIDI keyboard to play full range.</p>
+            <p>Feel free to change the instrument</p>
+        </fieldset>
 
+        
     </div>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.4.9/Tone.js"></script>
+    <script src='https://g200kg.github.io/webaudio-tinysynth/webaudio-tinysynth.js'></script>
     <script>
-        let synth = new Tone.PolySynth().toDestination();
-        let notes = ["C", "D", "E", "F", "G", "A", "B"]
-        let littleNotes = "awsedftgyhujkolpñ"
-        let html = ""
-        let currentOctave = 5
-        // let's pretend that a mouse doesn't have more than 9 buttons
-        let mouseDownCount = 0;
-        document.body.onmousedown = function(evt) { 
-            mouseDownCount = 1;
-        }
-        document.body.onmouseup = function(evt) {
-            mouseDownCount = 0;
-        }   
 
-        for(let octave = 0; octave < 7; octave++){
-            for (let i = 0; i < notes.length; i++){
-                hasSharp = true
-                let note = notes[i]
-                if(note == "E" || note == "B"){
-                    hasSharp = false
-                }
-                    html += `<div class='whitenote ${note}-note' onmouseover='checkNoteEnter(this, false)' onmouseleave='checkNoteLeave(this, false)' onmousedown='noteDown(this, false)'onmouseup='noteUp(this, false)' data-note='${note + (octave+3)}'>`
+        let tinySynth;
+        let timbre = 1;
+        
+        // Init synth & start midi
+        function init(){
+            tinySynth=new WebAudioTinySynth({voices:64});
+            for(var i=0;i<128;++i){
+                var o=document.createElement("option");
+                o.innerHTML=tinySynth.getTimbreName(0,i);
+                o.value=i;
+                document.getElementById("timbre").appendChild(o);
+            }
+            //setInterval(function(){
+            //    var st=tinySynth.getPlayStatus();
+            //    document.getElementById("status").innerHTML="Play:"+st.play+"  Pos:"+st.curTick+"/"+st.maxTick;
+            //},100);
+
+            //Set main Event Handlers: 
+            document.addEventListener("keydown", handleKeyDown)
+            document.addEventListener("keyup", handleKeyUp)
+
+        }
+        
+        // Controle Volume
+        function setVolume(value){
+            tinySynth.setMasterVol(value/100)
+        }
+
+        // load midi files
+        function loadMidi(files){
+            var reader = new FileReader();
+            reader.onload=(e)=>{
+                tinySynth.loadMIDI(reader.result);
+            }
+            reader.readAsArrayBuffer(files[0]);
+        }
+        
+        // play midi file
+        function playMidi(){
+            tinySynth.playMIDI();
+        }
+        
+        // stop midi file
+        function stopMidi(){
+            tinySynth.stopMIDI();
+        }
+        
+        // On Midi input handler
+        function onMidiMessage(message){
+            data = message.data,
+            cmd = data[0] >> 4,
+            channel = data[0] & 0xf,
+            type = data[0] & 0xf0, // channel agnostic message type. Thanks, Phil Burk.
+            note = data[1],
+            velocity = data[2];
+            // with pressure and tilt off
+            // note off: 128, cmd: 8 
+            // note on: 144, cmd: 9
+            // pressure / tilt on
+            // pressure: 176, cmd 11: 
+            // bend: 224, cmd: 14
+            
+            if(note && velocity > 0){
+                processSound([0x90,data[1],data[0]])
                 
-                if(hasSharp){
-                    html += `<div class='blacknote ${note}-note' onmouseover='checkNoteEnter(this, true)' onmouseleave='checkNoteLeave(this, true)' onmousedown='noteDown(this, true)'onmouseup='noteUp(this, true)' data-note='${note + '#'+(octave+3)}'></div>`
-                }
-                html += '</div>'
             }
-        }
-        document.getElementById('container').innerHTML = html;
-        function noteDown(elem,isSharp){
-            let note = elem.dataset.note
-            let noteNumber = noteToMidiObjct[note[0]] 
-            elem.style.background = isSharp ? noteColor[noteNumber+1] : noteColor[noteNumber]
-            elem.classList.add("playing")
-            synth.triggerAttackRelease(note, "16n")
-            event.stopPropagation()
-            mouseDownCount = 1;
-        }
-        function noteUp(elem, isSharp){
-            elem.style.background = isSharp ? '#333' : 'white'
-            elem.classList.remove("playing")
-        }
-        function checkNoteEnter(elem, isSharp){
-            if(!elem.classList.contains("playing") && mouseDownCount){
-                noteDown(elem, isSharp)
-                event.stopPropagation()
+            if(velocity == 0){
+                processSound([0x80,data[1],0])
             }
-        }
-        function checkNoteLeave(elem, isSharp){
-            if(elem.classList.contains("playing")){
-                noteUp(elem, isSharp)
-                event.stopPropagation()
-            }
-        }
-        
-        
-		// make the noise and connect it to the output
-		const noise = new Tone.Noise({
-			volume: -10,
-			type: "brown"
-		}).toDestination();
 
-		// bind the inteface
-		document.querySelector(".tone-momentary-button").addEventListener("mousedown", () => noise.start());
-		document.querySelector(".tone-momentary-button").addEventListener("mouseup", () => noise.stop());
+            //console.log('data', data, 'cmd', cmd, 'channel', channel);
+            
+        }
         
+        // Just a not-yet-implemented-filter function
+        function processSound(midiMessage){
+            tinySynth.send(midiMessage);
+        }
 
-        console.clear()
-        
+        // on Change instrument handler
+        function changeInstrument(number){
+            if(number == 128 && timbre < 127){
+                timbre++
+                changeSelect(timbre)
+            }
+            if(number == -1 && timbre > 1){
+                timbre--
+                changeSelect(timbre)
+            }
+            if(number > 0 && number < 127){
+                timbre = number
+            }
+            tinySynth.send([0xc0, timbre]);
+        }
+
+        //Process keyboard input on
+        function handleKeyDown(event){
+            let key = event.key
+            processSound([0x90,keyboardToMidi[key],100])
+        }
+        //Process keyboard input off
+        function handleKeyUp(event){
+            let key = event.key
+            processSound([0x80,keyboardToMidi[key],0])
+        }
+
+
+        init()
+        changeInstrument(1)
+
+        // Not sure if this can go inside init function
         if ("requestMIDIAccess" in navigator) {
         // The Web MIDI API is available to us!
             navigator.requestMIDIAccess().then(access=> {
@@ -143,136 +185,32 @@
                 }
             }).catch(console.error)
         }
-        
 
-        document.addEventListener("keydown", handleKeyDown)
-        document.addEventListener("keyup", handleKeyUp)
-
-        function handleKeyDown(event){
-            if(littleNotes.includes(event.key)){
-                let theNote = keyboardToNotesObjct[event.key]
-                let thisNoteOctave = "kolpñ".includes(event.key) ? currentOctave+1 : currentOctave
-                element = document.querySelector(`[data-note="${theNote + thisNoteOctave}"]`)
-                let wasSharp = false
-                if(theNote[theNote.length - 1] == "#"){
-                    wasSharp = true
-                }
-                noteDown(element,wasSharp)
-            }else if(event.key == "x" || event.key == "z"){
-                changeOctave(event.key)
-            }
+        // Helpers
+        function changeSelect(number){
+            document.getElementById("timbre").value = number
         }
 
-        function handleKeyUp(event){
-            console.log("keyUP")
-            if(littleNotes.includes(event.key)){
-                let theNote = keyboardToNotesObjct[event.key]
-                let thisNoteOctave = "kolpñ".includes(event.key) ? currentOctave+1 : currentOctave
-                element = document.querySelector(`[data-note="${theNote + thisNoteOctave}"]`)
-                let wasSharp = false
-                if(theNote[theNote.length - 1] == "#"){
-                    wasSharp = true
-                }
-                noteUp(element,wasSharp)
-                mouseDownCount = 0 //bizzare mouse-keyboard relationship cuz caos
-            }
+        //Datamappers
+        let keyboardToMidi = {
+            "a":61,
+            "w":62,
+            "s":63,
+            "e":64,
+            "d":65,
+            "f":66,
+            "t":67,
+            "g":68,
+            "y":69,
+            "h":70,
+            "u":71,
+            "j":72,
+            "k":73,
+            "o":74,
+            "l":75,
+            "p":76,
+            "ñ":77,
         }
-
-        function changeOctave(eventKey){
-            let direction = eventKey == "z" ? -1 : +1
-            currentOctave += direction
-        }
-
-        function onMidiMessage(message){
-            let [_,input,value] = message.data
-            if(input){
-                console.log({input, value})
-                let theNote = midiToNotesObjct[input % 12]
-                let theOctave = Math.floor(input/12)
-                console.log(theNote)
-                console.log(theOctave)
-                element = document.querySelector(`[data-note="${theNote + theOctave}"]`)
-                let wasSharp = false
-                if(theNote[theNote.length - 1] == "#"){
-                    wasSharp = true
-                }
-                if(value > 0){
-                    noteDown(element,wasSharp)
-                }
-                if(value == 0){
-                    noteUp(element,wasSharp)
-                }
-            }
-        }
-        
-        let midiToNotesObjct = {
-            0:"C",
-            1:"C#",
-            2:"D",
-            3:"D#",
-            4:"E",
-            5:"F",
-            6:"F#",
-            7:"G",
-            8:"G#",
-            9:"A",
-            10:"A#",
-            11:"B",
-        }
-        
-        let noteToMidiObjct = {
-            "C":0,
-            "C#":1,
-            "D":2,
-            "D#":3,
-            "E":4,
-            "F":5,
-            "F#":6,
-            "G":7,
-            "G#":8,
-            "A":9,
-            "A#":10,
-            "B":11,
-        }
-        
-        let noteColor = {
-            0: "#efd31a",
-            1: "#f4ae1a",
-            2: "#f36b28",
-            3: "#ee3344",
-            4: "#ec468b",
-            5: "#b856a1",
-            6: "#905ba6",
-            7: "#518bc9",
-            8: "#28beb6",
-            9: "#67bf6b",
-            10: "#cae089",
-            11: "#f7e49a",
-        }
-        
-        let keyboardToNotesObjct = {
-            "a":"C",
-            "w":"C#",
-            "s":"D",
-            "e":"D#",
-            "d":"E",
-            "f":"F",
-            "t":"F#",
-            "g":"G",
-            "y":"G#",
-            "h":"A",
-            "u":"A#",
-            "j":"B",
-            "k":"C",
-            "o":"C#",
-            "l":"D",
-            "p":"D#",
-            "ñ":"E",
-        }
-    
-        
-        
-        
     </script>
 </body>
 </html>
